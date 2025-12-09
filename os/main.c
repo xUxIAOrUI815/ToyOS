@@ -1,6 +1,8 @@
 #include <stdint.h>
 
 void printf(char *fmt, ...);
+void task_init();
+void schedule();
 extern uint64_t _app_start;
 extern uint64_t _app_end;
 extern void __alltraps();
