@@ -27,6 +27,8 @@ void load_and_run_app(){
     uint64_t *dst = (uint64_t *)APP_BASE_ADDRESS;
     uint64_t *end = &_app_end;
     while (src < end) *dst++ = *src++;
+
+    asm volatile("fence.i");
     
     printf("[Kernel] App loaded. Preparing to switch to User Mode... \n");
 
@@ -57,7 +59,20 @@ void load_and_run_app(){
 }
 
 void main(){
-    printf("\n[ToyOS] Phase 3: Privilege Switching\n");
-    load_and_run_app();
+    // printf("\n[ToyOS] Phase 3: Privilege Switching\n");
+    // load_and_run_app();
+    // while(1){};
+
+    printf("\n[ToyOS] Phase 4: Multiprogramming\n");
+
+    // 初始化
+    asm volatile("csrw stvec, %0" : : "r"(__alltraps));
+
+    // 初始化任务队列
+    task_init();
+
+    // 调度
+    printf("[Kernel] Starting schedule...\n");
+
     while(1){};
 }
