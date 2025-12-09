@@ -1,7 +1,10 @@
 #include <stdint.h>
 
+// 引用外部函数
 void printf(char *fmt, ...);
 void console_putchar(int c);
+void task_exit();
+void task_yield();
 
 typedef struct {
     uint64_t x[32];
@@ -29,10 +32,19 @@ TrapContext* syscall(TrapContext *cx) {
         cx->sepc += 4;
     } 
     else if (syscall_num == 93) { // sys_exit
-        printf("[Kernel] Application exited with code %d\n", cx->x[10]);
-        // 这里的死循环是为了防止跑飞
-        while(1);
+        // printf("[Kernel] Application exited with code %d\n", cx->x[10]);
+        // // 这里的死循环是为了防止跑飞
+        // while(1);
+        // 切换任务
+        printf("[Kernel] App %d exited. \n", cx->x[10]);
+
+        task_exit();
     } 
+    else if(syscall_num == 124){
+        // 124 常用的 yield 调用号
+        task_yield();
+        cx->sepc += 4;  // 返回后继续执行下一条指令
+    }
     else {
         printf("[Kernel] Unknown syscall: %d\n", syscall_num);
         while(1);
@@ -47,6 +59,7 @@ TrapContext* trap_handler(TrapContext *cx) {
     asm volatile("csrr %0, scause" : "=r"(scause));
     asm volatile("csrr %0, stval" : "=r"(stval));
     
+
     if ((scause >> 63) == 1) {
         // Interrupt
     } else {
