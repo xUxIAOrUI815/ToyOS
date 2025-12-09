@@ -13,7 +13,7 @@ QEMU_OPTS := -machine virt -nographic -bios default -kernel kernel.elf
 # 1. 加入了 printf.c
 # 2. trap.S 改名为 trap_entry.S (防止和 trap.c 冲突)
 # 3. 加入了 trap.c
-KERNEL_SRCS := os/entry.S os/main.c os/sbi.c os/printf.c os/link_app.S os/trap/trap_entry.S os/trap/trap.c
+KERNEL_SRCS := os/entry.S os/main.c os/sbi.c os/printf.c os/link_app.S os/trap/trap_entry.S os/trap/trap.c os/switch.S os/task.c
 
 # 处理成 .o 文件列表
 KERNEL_OBJS := $(KERNEL_SRCS:.c=.o)
