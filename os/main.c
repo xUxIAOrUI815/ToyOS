@@ -1,77 +1,63 @@
-// // os/main.c
-// // 声明我们在 sbi.c 里写的函数
-// void console_putstr(char *str);
+#include <stdint.h>
 
-// // 简易的 printf 实现（为了简化，这里暂时直接用 putstr）
-// // 后面章节我们会完善它
-// void printf(char *str) {
-//     console_putstr(str);
-// }
+void printf(char *fmt, ...);
+extern uint64_t _app_start;
+extern uint64_t _app_end;
+extern void __alltraps();
+extern void __restore(uint64_t *cx);
 
-// void main() {
-//     // 打印第一行欢迎语
-//     printf("\n");
-//     printf("Hello, Student! ToyOS is running!\n");
-//     printf("Phase 1: LibOS Initialized.\n");
-
-//     // 死循环，防止 OS 退出
-//     while (1) {};
-// }
-// os/main.c
-typedef unsigned long long uint64;
-
-// 引用 sbi.c 中的函数
-void console_putstr(char *str);
-
-void printf(char *str){
-    console_putstr(str);
-}
-
-// 引用 link_app.S 里的符号，知道 App 在哪里
-extern uint64 _app_start;
-extern uint64 _app_end;
-
-// App 应该被放到的目标地址
 #define APP_BASE_ADDRESS 0x80400000
+#define APP_SIZE_LIMIT 0x20000  // 假设 App 不超过 128KB
 
-// 简单的 memcpy
-void memcpy(void *dst, void *src, uint64 len) {
-    char *d = (char *)dst;
-    char *s = (char *)src;
-    while (len--) {
-        *d++ = *s++;
-    }
-}
+// 分配两个栈
+// Kernel Stack 各种中断处理用
+// User Stack 用户程序用
+uint8_t kernel_stack[4096 * 2];
+uint8_t user_stack[4096 * 2];
 
-void load_and_run_app() {
-    uint64 *src = &_app_start;
-    uint64 *dst = (uint64 *) APP_BASE_ADDRESS;
-    uint64 *end = &_app_end;
+typedef struct {
+    uint64_t x[32];
+    uint64_t sstatus;
+    uint64_t sepc;
+} TrapContext;
 
-    printf("Kernel: Loading app to 0x80400000...\n");
-
-    // 1. 以 8 字节为单位 搬运内存
-    while(src < end){
-        *dst++ = *src++;
-    }
-
-    printf("Kernel: App Loaded! Jumping to App ... \n");
-
-    // 2. 准备跳转
-    // 定义函数指针，指向 APP_BASE_ADDRESS
-    void (*app_entry)() = (void (*)()) APP_BASE_ADDRESS;
-
-    // 3. 跳转
-    app_entry();
-
-    // 如果 App 死循环，则这一行不会被打印
-    printf("Kernel: Error! App returned!\n");
-}
-
-int main() {
-    printf("\n[ToyOS] Phase 2: Batch System\n");
-    load_and_run_app();
+void load_and_run_app(){
+    // 1. 加载 App 代码
+    uint64_t *src = &_app_start;
+    uint64_t *dst = (uint64_t *)APP_BASE_ADDRESS;
+    uint64_t *end = &_app_end;
+    while (src < end) *dst++ = *src++;
     
-    // 死循环
-    while (1) {};
+    printf("[Kernel] App loaded. Preparing to switch to User Mode... \n");
+
+    // 2. 初始化 Trap 向量表
+    // 告诉 CPU 遇到 ecall 去哪里
+    asm volatile("csrw stvec, %0" : : "r"(__alltraps));
+
+    // 3. 构造一个 "伪造" 的 Trap 上下文
+    // 上下文放在 Kernel Stack 的栈顶
+    TrapContext *cx = (TrapContext *) (kernel_stack + sizeof(kernel_stack) - sizeof(TrapContext));
+
+    // 设置 sstatus: 将 SPP 位设为0 User Mode
+    // 1 << 5 是 SPIE 开启中断 这里简单设为 0
+    cx->sstatus = 0;
+
+    // 设置 sepc: 返回后跳转到 App 的入口地址
+    cx->sepc = APP_BASE_ADDRESS;
+
+    // 设置 sp: 用户栈的栈顶
+    cx->x[2] = (uint64_t)(user_stack + sizeof(user_stack));
+
+    // 设置 sscratch: 指向内核栈顶 给trap.S交换用
+    asm volatile("csrw sscratch, %0" : : "r"(kernel_stack + sizeof(kernel_stack)));
+
+    printf("[Kernel] Jumping to User App via __restore!\n");
+
+    __restore((uint64_t *)cx);
+}
+
+void main(){
+    printf("\n[ToyOS] Phase 3: Privilege Switching\n");
+    load_and_run_app();
+    while(1){};
 }
