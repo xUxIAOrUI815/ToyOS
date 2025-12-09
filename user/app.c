@@ -29,6 +29,11 @@ void sys_exit(int code){
     syscall(93, code, 0, 0);
 }
 
+// 实现 yield 函数
+void sys_yield(){
+    syscall(124, 0, 0, 0);
+}
+
 void main(){
     // 通过 ecall 请求内核打印
     sys_write("Hello! I am running in User Mode (U-Mode)! \n");
