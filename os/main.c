@@ -75,6 +75,7 @@ void main(){
 
     // 调度
     printf("[Kernel] Starting schedule...\n");
-
+    schedule();
+    
     while(1){};
 }
