@@ -2,7 +2,6 @@
 
 void printf(char *fmt, ...);
 extern void __switch(uint64_t *current_cx_ptr, uint64_t *next_cx_ptr);
-extern void __restore_to_user();
 
 // 1. 定义任务上下文 (必须只定义一次！)
 typedef struct {
@@ -15,21 +14,32 @@ typedef struct {
 #define APP_BASE_ADDRESS 0x80400000
 #define APP_SIZE_LIMIT 0x20000
 
-// 2. 定义任务控制块
+// // 2. 定义任务控制块
+// typedef struct {
+//     uint64_t kernel_stack[4096 / 8]; // 内核栈
+//     uint64_t user_stack[4096 / 8];   // 用户栈
+//     TaskContext context;             // 切换上下文
+//     int is_running;                  // 状态
+// } TaskControlBlock;
+
+// 修改栈顺序
 typedef struct {
-    uint64_t kernel_stack[4096 / 8]; // 内核栈
-    uint64_t user_stack[4096 / 8];   // 用户栈
-    TaskContext context;             // 切换上下文
     int is_running;                  // 状态
+    TaskContext context;             // 切换上下文
+    uint64_t user_stack[4096 / 8];   // 用户栈
+    uint64_t kernel_stack[4096 / 8]; // 内核栈
 } TaskControlBlock;
 
 // 全局变量
 TaskControlBlock tasks[MAX_APP_NUM];
-int current_task_id = 0;
 int app_num = 0;
+
+TaskContext idle_cx;
+int current_task_id = -1;
 
 extern uint64_t _app_start;
 extern uint64_t _app_end;
+extern void __restore_to_user();
 
 // 3. 任务初始化函数
 void task_init() {
@@ -75,23 +85,42 @@ void task_init() {
 void schedule() {
     int next_id = (current_task_id + 1) % app_num;
     
-    while (tasks[next_id].is_running == 0) {
-        next_id = (next_id + 1) % app_num;
-        if (next_id == current_task_id) {
-            printf("[Kernel] All tasks finished!\n");
-            while(1);
+    if(current_task_id == -1){
+        next_id = 0;
+    }else{
+        next_id = (current_task_id + 1) % app_num;
+        while (tasks[next_id].is_running == 0) {
+            next_id = (next_id + 1) % app_num;
+            if (next_id == current_task_id) {
+                printf("[Kernel] All tasks finished!\n");
+                while(1);
+            }
         }
     }
     
+    
     int prev_id = current_task_id;
     current_task_id = next_id;
+
+    if(prev_id != -1){
+        printf("[Kernel] Switch %d -> %d \n", prev_id, next_id);
+
+        // 任务间切换
+        // 注意：这里的强制类型转换必须有括号 (uint64_t *)
+        __switch((uint64_t *)&tasks[prev_id].context, 
+                 (uint64_t *)&tasks[next_id].context);
+    }else{
+        printf("[Kernel] Idle -> Task %d \n", next_id);
+        // 第一次切换 保存到 idle_cx, 而不是覆盖 tasks[0]
+        __switch((uint64_t *)&idle_cx, 
+                 (uint64_t *)&tasks[next_id].context);
+    }
     
     printf("[Kernel] Switch %d -> %d\n", prev_id, next_id);
     // printf("[Kernel] Switching task... \n");
     
-    // 注意：这里的强制类型转换必须有括号 (uint64_t *)
-    __switch((uint64_t *)&tasks[prev_id].context, 
-             (uint64_t *)&tasks[next_id].context);
+    
+    
 }
 
 void task_yield() {
