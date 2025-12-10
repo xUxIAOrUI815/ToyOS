@@ -8,6 +8,11 @@ SECTIONS
     .text : {
         *(.text .text.*)
     }
+    /* 显式包含 rodata */
+    .rodata : {
+        *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
+    }
     .data : {
         *(.data .data.*)
     }
