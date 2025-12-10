@@ -53,6 +53,9 @@ __alltraps:
 
 __restore:
     mv sp, a0
+    .globl __restore_to_user
+    
+__restore_to_user:
     
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)

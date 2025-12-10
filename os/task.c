@@ -2,6 +2,7 @@
 
 void printf(char *fmt, ...);
 extern void __switch(uint64_t *current_cx_ptr, uint64_t *next_cx_ptr);
+extern void __restore_to_user();
 
 // 1. 定义任务上下文 (必须只定义一次！)
 typedef struct {
@@ -47,7 +48,7 @@ void task_init() {
         
         // 初始化 switch 上下文
         extern void __restore();
-        tasks[i].context.ra = (uint64_t)__restore;
+        tasks[i].context.ra = (uint64_t)__restore_to_user;
         tasks[i].context.sp = kstack_top;
         
         // 构造 Trap 上下文
@@ -86,6 +87,7 @@ void schedule() {
     current_task_id = next_id;
     
     printf("[Kernel] Switch %d -> %d\n", prev_id, next_id);
+    // printf("[Kernel] Switching task... \n");
     
     // 注意：这里的强制类型转换必须有括号 (uint64_t *)
     __switch((uint64_t *)&tasks[prev_id].context, 
