@@ -7,7 +7,7 @@ OBJCOPY := $(TARGET)-objcopy
 CFLAGS := -Wall -O2 -fno-builtin -march=rv64gc -mabi=lp64d -mcmodel=medany
 USER_CFLAGS := $(CFLAGS) -fno-stack-protector
 
-QEMU_OPTS := -machine virt -nographic -bios default -kernel kernel.elf
+QEMU_OPTS := -machine virt -m 128M -nographic -bios default -kernel kernel.elf
 
 # --- 关键修改：源文件列表 ---
 # 1. 加入了 printf.c
