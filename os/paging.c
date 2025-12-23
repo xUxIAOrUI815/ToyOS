@@ -30,6 +30,30 @@ extern char erodata[];  // 只读数据结束
 extern char ekernel[];  // 内核结束
 extern char tramp_start[]; // Trap 代码开始
 
+// 创建用户页表
+// 分配根页表
+// 映射 Trap入口  所有进程都必须有，否则无法进入内核
+pagetable_t uvm_create(){
+    pagetable_t pagetable = (pagetable_t) frame_alloc();
+    if(pagetable == 0) return 0;
+
+    // 映射 Trampoline 到虚拟地址最高处 (与内核页表保持一致)
+    // TODO: 先返回空页表
+    return pagetable;
+}
+
+// 给用户页表添加映射
+// va: 用户虚拟地址
+// pa: 物理地址
+// size: 大小
+// perm: 权限 (比如 PTE_R | PTE_W | PTE_U)
+void uvm_map(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int perm) {
+    if (mappages(pagetable, va, pa, size, perm | PTE_U) != 0) {
+        printf("[Kernel] uvm_map failed!\n");
+        while(1);
+    }
+}
+
 // QEMU 的 UART 物理地址
 #define UART0 0x10000000L
 #define MEMORY_END 0x88000000L
@@ -71,15 +95,15 @@ int mappages(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int
     return 0;
 }
 
-// 🔴【新增】内核页表指针
+// 内核页表指针
 pagetable_t kernel_pagetable;
 
-// 🔴【新增】创建内核页表
+// 创建内核页表
 void kvminit() {
     kernel_pagetable = (pagetable_t)frame_alloc();
     printf("[Kernel] Kernel PT created at %x\n", kernel_pagetable);
 
-    // 1. 映射 UART (如果不映射，printf 会死)
+    // 1. 映射 UART 
     // 权限: R | W
     mappages(kernel_pagetable, UART0, UART0, PAGE_SIZE, PTE_R | PTE_W);
     printf("[Kernel] Map UART... done.\n");
@@ -108,7 +132,7 @@ void kvminit() {
     // mappages(kernel_pagetable, (uint64_t)tramp_start, (uint64_t)tramp_start, PAGE_SIZE, PTE_R | PTE_X);
 }
 
-// 🔴【新增】开启分页！
+// 开启分页
 void kvminithart() {
     // 写入 satp 寄存器
     // Mode = 8 (SV39), PPN = kernel_pagetable
