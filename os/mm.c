@@ -12,6 +12,7 @@ extern char ekernel[];
 // 用一个数组来存空闲页的物理页号
 // 缩小页内存到 512 而不是 32768
 #define MAX_PHYSICAL_PAGES 512
+
 uint64_t recycled_pages[MAX_PHYSICAL_PAGES];
 int recycled_ptr = 0;
 
@@ -23,6 +24,7 @@ void mm_init() {
 
     printf("[Kernel] Checking BSS: recycled_ptr=%d (Expect 0)\n", recycled_ptr);
 
+    recycled_ptr = 0;
 
     // ekernel 是内核代码结束的地方，从这里开始分配
     current_palloc_start = (uint64_t)ekernel;
@@ -49,27 +51,23 @@ void* frame_alloc() {
     } else {
         // 如果回收栈是空的，就从未使用的内存中切一块
         if(current_palloc_start < current_palloc_end){
-            ppn = current_palloc_start < PAGE_SIZE;
-            // 🔴 先不写回全局变量，看是不是写操作导致的崩溃
-            // current_palloc_start += PAGE_SIZE;
+            ppn = current_palloc_start / PAGE_SIZE;
+            current_palloc_start += PAGE_SIZE;
         }else{
             printf("[Kernel] Out of Memory!\n");
             return 0;
         }
     }
 
-    // 🔴 手动加上偏移，看是否是加法运算崩的
-    current_palloc_start = current_palloc_start + PAGE_SIZE;
 
     // 先清空这一页内存，防止读到脏数据
     uint64_t addr = ppn * PAGE_SIZE;
     printf("[Kernel] Allocated addr: %x\n", (int)addr);
-    
-    // 🔴 彻底禁用 memset，排除内存写入嫌疑
-    // char *mem = (char *) addr;
-    // for (int i = 0; i < PAGE_SIZE; i++){
-    //     mem[i] = 0;
-    // }
+
+    char *mem = (char *) addr;
+    for (int i = 0; i < PAGE_SIZE; i++){
+        mem[i] = 0;
+    }
 
     return (void*) addr;
 }
