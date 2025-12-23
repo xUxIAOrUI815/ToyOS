@@ -146,22 +146,34 @@ void main(){
 
     // while (1) {};
 
+    // printf("\n[ToyOS] Phase 6: Page Table Mapping\n");
+    
+    // mm_init(); // 1. 物理内存初始化
+    
+    // // 2. 建立内核页表
+    // kvminit();
+    
+    // // 3. 开启 MMU
+    // kvminithart();
+    
+    // // 4. 
+    // printf("[Kernel] System matches Physical Memory 1:1.\n");
+    
+    // // 5. 恢复之前的任务调度 (Phase 4 的内容)
+    // // task_init();
+    // // schedule();
+
+    // while (1) {};
+
     printf("\n[ToyOS] Phase 6: Page Table Mapping\n");
-    
-    mm_init(); // 1. 物理内存初始化
-    
-    // 2. 建立内核页表
+    mm_init();
     kvminit();
-    
-    // 3. 开启 MMU
     kvminithart();
-    
-    // 4. 如果能打印这句话，说明我们活下来了！
     printf("[Kernel] System matches Physical Memory 1:1.\n");
     
-    // 5. 恢复之前的任务调度 (Phase 4 的内容)
-    // task_init();
-    // schedule();
+    // 🔴 启动多进程
+    task_init();
+    schedule();
 
     while (1) {};
 }
