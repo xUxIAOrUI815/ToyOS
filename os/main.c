@@ -6,6 +6,8 @@ void schedule();
 void mm_init();
 void* frame_alloc();
 void frame_dealloc(void *ptr);
+void kvminit();
+void kvminithart();
 extern uint64_t _app_start;
 extern uint64_t _app_end;
 extern void __alltraps();
@@ -109,35 +111,57 @@ void main(){
 
     // while(1){};
 
+    // printf("\n[ToyOS] Phase 6: Page Table Mapping\n");
+    
+    // mm_init(); // 1. 初始化物理内存
+    
+    // // 2. 创建一个根页表
+    // pagetable_t root_pt = (pagetable_t)frame_alloc();
+    // printf("[Main] Root PageTable at %x\n", (int)(uint64_t)root_pt);
+    
+    // // 3. 测试映射
+    // // 目标：将虚拟地址 0x10000 映射到物理地址 0x80200000 (内核起点)
+    // // 权限：R | W | X (7 << 1)
+    // // 标志：PTE_V (1)
+    // int perm = (1 << 1) | (1 << 2) | (1 << 3); // R W X
+    
+    // printf("[Main] Mapping 0x10000 -> 0x80200000 ...\n");
+    // mappages(root_pt, 0x10000, 0x80200000, 4096, perm);
+    
+    // // 4. 验证：手动查表 (模拟硬件行为)
+    // // 0x10000 对应的 VPN2=0, VPN1=0, VPN0=16 (0x10)
+    // // 我们直接看 walk 函数能不能帮我们找到
+    // extern uint64_t* walk(pagetable_t pagetable, uint64_t va, int alloc);
+    // uint64_t *pte = walk(root_pt, 0x10000, 0);
+    
+    // if (pte && (*pte & 1)) {
+    //     printf("[Main] Success! PTE at %x value: %x\n", (int)(uint64_t)pte, (int)*pte);
+    //     // 验证 PPN 是否正确
+    //     // 0x80200 = 0x80200000 >> 12
+    //     // PTE >> 10 应该是 0x200800 (因为 RISC-V PPN 在高位)
+    //     // 简单验证：只要不是 0 就行
+    // } else {
+    //     printf("[Main] Failed! Mapping not found.\n");
+    // }
+
+    // while (1) {};
+
     printf("\n[ToyOS] Phase 6: Page Table Mapping\n");
+    
+    mm_init(); // 1. 物理内存初始化
+    
+    // 2. 建立内核页表
+    kvminit();
+    
+    // 3. 开启 MMU
+    kvminithart();
+    
+    // 4. 如果能打印这句话，说明我们活下来了！
+    printf("[Kernel] System matches Physical Memory 1:1.\n");
+    
+    // 5. 恢复之前的任务调度 (Phase 4 的内容)
+    // task_init();
+    // schedule();
 
-    mm_init();
-
-    // 创建一个根页表
-    pagetable_t root_pt = (pagetable_t)frame_alloc();
-    printf("[Main] Root PageTable at %x\n", (int)(uint64_t)root_pt);
-
-    // 测试映射
-    // 目标：将虚拟地址 0x10000 映射到物理地址 0x80200000 (内核起点)
-    // 权限：R | W | X (7 << 1)
-    // 标志：PTE_V (1)
-    int perm = (1 << 1) | (1 << 2) | (1 << 3); // R W X
-
-    printf("[Main] Mapping 0x10000 -> 0x80200000 ... \n");
-    mappages(root_pt, 0x10000, 0x80200000, 4097, param);
-
-    // 验证
-    extern uint64_t* walk(pagetable_t pagetable, uint64_t va, int alloc);
-    uint64_t *pte = walk(root_pt, 0x10000, 0);
-
-    if(pte && (*pte & 1)){
-        printf("[Main] Success! PTE at %x value: %x \n", (int)(uint64_t)pte, (int)*pte);
-        // 验证 PPN 是否正确
-        // 0x80200 = 0x80200000 >> 12
-        // PTE >> 10 应该是 0x200800 (因为 RISC-V PPN 在高位)
-    }else{
-        printf("[Main] Failed! Mapping not found. \n");
-    }
-
-    while(1){};
+    while (1) {};
 }
