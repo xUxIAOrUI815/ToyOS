@@ -1,5 +1,6 @@
 # os/trap/trap_entry.S
-.section .text
+# 🔴【修改】把 .section .text 改为 .section .text.trampoline
+.section .text.trampoline
 .globl __alltraps
 .globl __restore
 .align 2
