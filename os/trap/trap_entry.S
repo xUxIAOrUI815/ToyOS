@@ -5,9 +5,13 @@
 .align 2
 
 __alltraps:
+    # 从用户态陷入内核时保存上下文
     csrrw sp, sscratch, sp
+    # 分配 34 * 8 = 272 字节的栈空间
+    # 32 个通用寄存器 和 2 个CSR(sstatus 和 sepc)
     addi sp, sp, -34*8
     
+    # 保存通用寄存器
     sd x1, 1*8(sp)
     # x2 (sp) saved later
     sd x3, 3*8(sp)
@@ -40,23 +44,25 @@ __alltraps:
     sd x30, 30*8(sp)
     sd x31, 31*8(sp)
     
+    # 记录 trap 前的特权级、中断使能
     csrr t0, sstatus
     csrr t1, sepc
-    sd t0, 32*8(sp)
-    sd t1, 33*8(sp)
+    sd t0, 32*8(sp)     
+    sd t1, 33*8(sp)     
     
-    csrr t2, sscratch
-    sd t2, 2*8(sp)
+    csrr t2, sscratch   
+    sd t2, 2*8(sp)      
     
-    mv a0, sp
+    mv a0, sp          
     call trap_handler
 
 __restore:
+    # 从内核恢复到用户态时恢复上下文
     mv sp, a0
     .globl __restore_to_user
     
 __restore_to_user:
-    
+    # 从内核恢复到用户态时恢复上下文
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
     csrw sstatus, t0

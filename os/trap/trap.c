@@ -72,9 +72,6 @@ TrapContext* trap_handler(TrapContext *cx) {
             while(1);
         }
     }
-    
-    // 🔴【调试】如果这里打印 0，那就是编译器杀疯了
-    // printf("[Kernel] trap_handler returning: %x\n", cx);
-    
+
     return cx;
 }

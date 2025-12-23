@@ -1,3 +1,5 @@
+# 内核的启动入口，负责在 CPU 刚启动，没有任何运行环境的情况下
+# 初始化最基本的执行环境（主要是栈）并跳转到C语言的main函数
     .section .text.entry
     .globl _start
 _start:

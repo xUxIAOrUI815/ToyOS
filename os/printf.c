@@ -1,3 +1,5 @@
+// 依赖 console_putchar 函数输出字符
+// Log 打印
 #include <stdarg.h>
 
 void console_putchar(int c);
