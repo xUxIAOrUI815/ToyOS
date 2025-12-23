@@ -3,6 +3,15 @@
     .section .text.entry
     .globl _start
 _start:
+    la a0, sbss
+    la a1, ebss
+    bge a0, a1, end_bss_init
+loop_bss_init:
+    sd zero, 0(a0)
+    addi a0, a0, 8
+    blt a0, a1, loop_bss_init
+end_bss_init:
+
     # 1. 设置栈指针 sp (Stack Pointer)
     # 栈是向下生长的，所以我们要把它设在分配空间的顶部
     la sp, boot_stack_top
