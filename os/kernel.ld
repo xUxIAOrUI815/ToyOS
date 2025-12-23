@@ -29,4 +29,9 @@ SECTIONS
         *(.bss .bss.*)
         *(.sbss .sbss.*)
     }
+
+    /* 定义内核结束的地址 */
+    . = ALIGN(4096);
+    .global ekernel
+    ekernel = .;
 }
