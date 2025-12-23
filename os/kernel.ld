@@ -24,14 +24,21 @@ SECTIONS
         *(.data .data.*)
     }
 
-    /* BSS段 (未初始化的变量，自动清零) */
-    .bss : {
+    /* BSS段 */
+    /* .bss : {
         *(.bss .bss.*)
         *(.sbss .sbss.*)
+    }*/
+    .bss : {
+        . = ALIGN(8);
+        sbss = .;      /* BSS 开始 */
+        *(.bss .bss.*)
+        *(.sbss .sbss.*)
+        . = ALIGN(8);
+        ebss = .;      /* BSS 结束 */
     }
 
     /* 定义内核结束的地址 */
     . = ALIGN(4096);
-    .global ekernel
     ekernel = .;
 }
