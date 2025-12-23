@@ -9,15 +9,29 @@ SECTIONS
     . = BASE_ADDRESS;
 
     /* 代码段 */
+    /* 🔴【修改】导出 stext (Start Text) */
+    stext = .;
     .text : {
         *(.text.entry)  /* entry.S 必须放最前面 */
         *(.text .text.*)
+        /* 🔴【新增】把 trampoline (Trap入口) 对齐到页边界，方便映射 */
+        . = ALIGN(4096);
+        tramp_start = .;
+        *(.text.trampoline)
+        . = ALIGN(4096);
+        tramp_end = .;
     }
+    . = ALIGN(4096);
+    /* 🔴【修改】导出 etext (End Text) */
+    etext = .;
 
-    /* 只读数据段 (如字符串 "Hello") */
     .rodata : {
         *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
     }
+    . = ALIGN(4096);
+    /* 🔴【修改】导出 erodata */
+    erodata = .;
 
     /* 数据段 (已初始化的全局变量) */
     .data : {
@@ -25,10 +39,6 @@ SECTIONS
     }
 
     /* BSS段 */
-    /* .bss : {
-        *(.bss .bss.*)
-        *(.sbss .sbss.*)
-    }*/
     .bss : {
         . = ALIGN(8);
         sbss = .;      /* BSS 开始 */
