@@ -5,6 +5,7 @@ void printf(char *fmt, ...);
 void console_putchar(int c);
 void task_exit();
 void task_yield();
+long console_getchar();
 
 typedef struct {
     uint64_t x[32];
@@ -45,6 +46,25 @@ TrapContext* syscall(TrapContext *cx) {
         task_yield();
         cx->sepc += 4;  // 返回后继续执行下一条指令
     }
+    else if(syscall_num == 63){
+        uint64_t fd = cx->x[10];
+        char *buf = (char *)cx->x[11];
+        uint64_t len = cx->x[12];
+
+        // 只支持标准输入(fd=0)
+        if(fd == 0){
+            long c;
+            while(1){
+                c = console_getchar();
+                if(c != -1) break;
+            }
+            *buf = (char) c;
+            cx->x[10] = 1;
+        }else{
+            cx->x[10] = 0;
+        }
+        cx->sepc += 4;
+    }
     else {
         printf("[Kernel] Unknown syscall: %d\n", syscall_num);
         while(1);
@@ -54,24 +74,46 @@ TrapContext* syscall(TrapContext *cx) {
     return cx;
 }
 
+// TrapContext* trap_handler(TrapContext *cx) {
+//     uint64_t scause, stval;
+//     asm volatile("csrr %0, scause" : "=r"(scause));
+//     asm volatile("csrr %0, stval" : "=r"(stval));
+    
+
+//     if ((scause >> 63) == 1) {
+//         // Interrupt
+//     } else {
+//         if (scause == 8) {
+//             // 🔴【修改2】接住 syscall 返回的指针
+//             cx = syscall(cx);
+//         } else {
+//             printf("[Kernel] Fatal Exception! scause=%d, stval=%x, sepc=%x\n", 
+//                    scause, stval, cx->sepc);
+//             while(1);
+//         }
+//     }
+
+//     return cx;
+// }
 TrapContext* trap_handler(TrapContext *cx) {
     uint64_t scause, stval;
     asm volatile("csrr %0, scause" : "=r"(scause));
     asm volatile("csrr %0, stval" : "=r"(stval));
     
-
+    // 判断是不是中断
     if ((scause >> 63) == 1) {
-        // Interrupt
+        // ... (暂不处理)
     } else {
         if (scause == 8) {
-            // 🔴【修改2】接住 syscall 返回的指针
             cx = syscall(cx);
         } else {
-            printf("[Kernel] Fatal Exception! scause=%d, stval=%x, sepc=%x\n", 
-                   scause, stval, cx->sepc);
+            // 🔴【关键】打印详细崩溃信息
+            printf("\n[Kernel] PANIC! Exception @ Kernel Mode\n");
+            printf("scause = %d (Exception Type)\n", scause);
+            printf("stval  = %x (Bad Address)\n", stval);
+            printf("sepc   = %x (Instruction Address)\n", cx->sepc);
             while(1);
         }
     }
-
     return cx;
 }
