@@ -69,7 +69,7 @@ void task_init() {
         void *app_mem = frame_alloc();
         my_memcpy(app_mem, &_app_start, app_size);
         
-        // 🔴【关键】刷新指令缓存！防止CPU读到旧数据
+        // 刷新指令缓存 防止CPU读到旧数据
         asm volatile("fence.i");
 
         // 映射到 0x10000, 权限 R|W|X|U
@@ -141,3 +141,75 @@ void schedule() {
 
 void task_yield() { schedule(); }
 void task_exit() { tasks[current_task_id].is_running = 0; schedule(); }
+
+int uvm_copy(pagetable_t old_pt, pagetable_t new_pt, uint64_t sz);
+pagetable_t uvm_create(); // paging.c
+
+int pid_counter = 1;        // pid 分配器  递增形式
+int alloc_pid() { return pid_counter++; }
+#define USER_SPACE_SIZE 0x30000
+
+// 返回子进程的 PID
+int task_fork() {
+    // 1. 寻找一个空闲的 TCB
+    int child_id = -1;
+    for (int i = 0; i < MAX_APP_NUM; i++) {
+        if (tasks[i].is_running == 0) { // 0 表示空闲/已死
+            child_id = i;
+            break;
+        }
+    }
+    if (child_id == -1) {
+        printf("[Kernel] No free task slot for fork!\n");
+        return -1;
+    }
+    
+    TaskControlBlock *parent = &tasks[current_task_id];
+    TaskControlBlock *child = &tasks[child_id];
+    
+    // 2. 创建子进程页表
+    child->pagetable = uvm_create();
+    // 复制内核映射
+    my_memcpy(child->pagetable, kernel_pagetable, PAGE_SIZE);
+    
+    // 3. 【核心】复制用户地址空间 (代码段 + 栈)
+    // 从父进程页表复制到子进程页表
+    if (uvm_copy(parent->pagetable, child->pagetable, USER_SPACE_SIZE) < 0) {
+        printf("[Kernel] Fork failed: Memory copy error\n");
+        return -1;
+    }
+    
+    // 4. 复制 Trap 上下文
+    // 子进程的 TrapContext 就在它的内核栈顶
+    uint64_t kstack_top = (uint64_t)&child->kernel_stack[PAGE_SIZE/8];
+    // 初始化 switch 上下文
+    child->context.ra = (uint64_t)__restore_to_user;
+    child->context.sp = kstack_top;
+    
+    // 定位 TrapContext
+    typedef struct {
+        uint64_t x[32];
+        uint64_t sstatus;
+        uint64_t sepc;
+    } TrapContext;
+    
+    kstack_top -= sizeof(TrapContext);
+    TrapContext *child_cx = (TrapContext *)kstack_top;
+    TrapContext *parent_cx = (TrapContext *)(parent->context.sp); // 父进程当前的 TrapContext
+    
+    // 修正 child->context.sp 指向 TrapContext 底部
+    child->context.sp = kstack_top;
+    
+    // 直接内存拷贝 TrapContext
+    *child_cx = *parent_cx;
+    
+    // 5. 【关键】修改子进程的返回值
+    // fork 对子进程返回 0
+    child_cx->x[10] = 0; // x10 是 a0 寄存器
+    
+    // 6. 激活子进程
+    child->is_running = 1;
+    
+    // 7. 返回子进程 PID 给父进程 暂时用数组索引当 PID
+    return child_id; // 或者 return alloc_pid();
+}
