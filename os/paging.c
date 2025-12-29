@@ -14,6 +14,8 @@ void* frame_alloc();
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4)
+#define PTE_A (1L << 6)
+#define PTE_D (1L << 7)
 
 #define PAGE_SIZE 4096
 #define PTE2PPN(pte) (((pte) >> 10) & 0x0FFFFFFFFFFFFFL)
@@ -30,29 +32,6 @@ extern char erodata[];  // 只读数据结束
 extern char ekernel[];  // 内核结束
 extern char tramp_start[]; // Trap 代码开始
 
-// 创建用户页表
-// 分配根页表
-// 映射 Trap入口  所有进程都必须有，否则无法进入内核
-pagetable_t uvm_create(){
-    pagetable_t pagetable = (pagetable_t) frame_alloc();
-    if(pagetable == 0) return 0;
-
-    // 映射 Trampoline 到虚拟地址最高处 (与内核页表保持一致)
-    // TODO: 先返回空页表
-    return pagetable;
-}
-
-// 给用户页表添加映射
-// va: 用户虚拟地址
-// pa: 物理地址
-// size: 大小
-// perm: 权限 (比如 PTE_R | PTE_W | PTE_U)
-void uvm_map(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int perm) {
-    if (mappages(pagetable, va, pa, size, perm | PTE_U) != 0) {
-        printf("[Kernel] uvm_map failed!\n");
-        while(1);
-    }
-}
 
 // QEMU 的 UART 物理地址
 #define UART0 0x10000000L
@@ -80,19 +59,49 @@ uint64_t* walk(pagetable_t pagetable, uint64_t va, int alloc) {
 int mappages(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int perm) {
     uint64_t start = va;
     uint64_t end = va + size;
-    va &= ~(PAGE_SIZE - 1);
-    for (;;) {
-        uint64_t *pte = walk(pagetable, va, 1);
+    uint64_t offset = pa - start;
+
+    for (uint64_t a = start; a <= end; a += PAGE_SIZE) {
+        uint64_t *pte = walk(pagetable, a, 1);
         if (pte == 0) return -1;
-        if (*pte & PTE_V) {
-            // printf("Remap panic: %x\n", va); // 调试时不报错，方便重入
+        
+        // 🔴 如果是 Map Text 阶段，打印一下当前进度
+        // 这样我们知道是在第几页崩的
+        if (va == (uint64_t)stext) {
+             // 减少打印频率，只打印每 4KB
+             printf("Mapping VA %x\n", a);
         }
-        *pte = PPN2PTE(pa / PAGE_SIZE) | perm | PTE_V;
-        if (va == end - PAGE_SIZE) break;
-        va += PAGE_SIZE;
-        pa += PAGE_SIZE;
+
+        if (*pte & PTE_V) {
+            // printf("Remap warning: %x\n", a);
+        }
+        *pte = PPN2PTE((a + offset) / PAGE_SIZE) | perm | PTE_V | PTE_A | PTE_D;
     }
     return 0;
+}
+
+// 创建用户页表
+// 分配根页表
+// 映射 Trap入口  所有进程都必须有，否则无法进入内核
+pagetable_t uvm_create(){
+    pagetable_t pagetable = (pagetable_t) frame_alloc();
+    if(pagetable == 0) return 0;
+
+    // 映射 Trampoline 到虚拟地址最高处 (与内核页表保持一致)
+    // TODO: 先返回空页表
+    return pagetable;
+}
+
+// 给用户页表添加映射
+// va: 用户虚拟地址
+// pa: 物理地址
+// size: 大小
+// perm: 权限 (比如 PTE_R | PTE_W | PTE_U)
+void uvm_map(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int perm) {
+    if (mappages(pagetable, va, pa, size, perm | PTE_U) != 0) {
+        printf("[Kernel] uvm_map failed!\n");
+        while(1);
+    }
 }
 
 // 内核页表指针
@@ -101,7 +110,10 @@ pagetable_t kernel_pagetable;
 // 创建内核页表
 void kvminit() {
     kernel_pagetable = (pagetable_t)frame_alloc();
-    printf("[Kernel] Kernel PT created at %x\n", kernel_pagetable);
+
+    // printf("[Kernel] Kernel PT created at %x\n", kernel_pagetable);
+    printf("[Kernel] stext=%x, etext=%x\n", (uint64_t)stext, (uint64_t)etext);
+    printf("[Kernel] Text Size=%x\n", (uint64_t)etext - (uint64_t)stext);
 
     // 1. 映射 UART 
     // 权限: R | W
@@ -110,6 +122,10 @@ void kvminit() {
 
     // 2. 映射内核代码段 (.text)
     // 权限: R | X
+    // mappages(kernel_pagetable, (uint64_t)stext, (uint64_t)stext, 
+    //          (uint64_t)etext - (uint64_t)stext, PTE_R | PTE_X);
+    // printf("[Kernel] Map Text... done.\n");
+    printf("[Kernel] Start mapping Text...\n");
     mappages(kernel_pagetable, (uint64_t)stext, (uint64_t)stext, 
              (uint64_t)etext - (uint64_t)stext, PTE_R | PTE_X);
     printf("[Kernel] Map Text... done.\n");
@@ -145,4 +161,48 @@ void kvminithart() {
     asm volatile("sfence.vma zero, zero");
     
     printf("[Kernel] Paging ENABLED! Hello from Virtual World!\n");
+}
+
+
+void* frame_alloc();
+void uvm_map(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int perm);
+
+// 简单的内存复制
+void my_memcpy_paging(void *dst, void *src, uint64_t len) {
+    char *d = dst; char *s = src;
+    while(len--) *d++ = *s++;
+}
+
+// 从父页表复制内存给子页表
+// old_pt: 父进程页表
+// new_pt: 子进程页表
+// start/sz: 用户空间范围 (0 ~ 0xXXXXX)
+int uvm_copy(pagetable_t old_pt, pagetable_t new_pt, uint64_t sz) {
+    uint64_t start = 0;
+    
+    // 遍历用户空间的每一页
+    for (uint64_t va = start; va < sz; va += PAGE_SIZE) {
+        // 1. 在父页表中找到 PTE
+        uint64_t *old_pte = walk(old_pt, va, 0);
+        if (!old_pte || !(*old_pte & PTE_V)) {
+            continue; // 如果父进程没用这页，跳过
+        }
+        
+        // 2. 获取父进程这页的物理地址
+        uint64_t pa = PTE2PA(*old_pte);
+        // 获取权限 (屏蔽掉 R/W/X 以外的位，比如 A/D)
+        int flags = (*old_pte) & 0x3FF; 
+
+        // 3. 为子进程分配一个新的物理页
+        void *new_pa = frame_alloc();
+        if (new_pa == 0) return -1; // 内存不足
+        
+        // 4. 【关键】把父进程的数据拷贝到新页
+        my_memcpy_paging(new_pa, (void*)pa, PAGE_SIZE);
+        
+        // 5. 在子进程页表中建立映射
+        // 注意：flags 包含了 PTE_U 等标志
+        uvm_map(new_pt, va, (uint64_t)new_pa, PAGE_SIZE, flags);
+    }
+    return 0;
 }
