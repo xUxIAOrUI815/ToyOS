@@ -215,6 +215,10 @@ int task_fork() {
     
     // 直接内存拷贝 TrapContext
     *child_cx = *parent_cx;
+
+    //【新增】帮子进程跳过 ecall 指令！
+    // 否则它醒来后会再次执行 sys_fork，导致无限递归
+    child_cx->sepc += 4; 
     
     // 5. 【关键】修改子进程的返回值
     // fork 对子进程返回 0
