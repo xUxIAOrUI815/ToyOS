@@ -112,21 +112,33 @@ void task_init() {
 
 void schedule() {
     int next_id;
-    if (current_task_id == -1) next_id = 0;
-    else {
-        next_id = (current_task_id + 1) % app_num;
-        while (tasks[next_id].is_running == 0) {
-            next_id = (next_id + 1) % app_num;
-            if (next_id == current_task_id) {
-                printf("[Kernel] All tasks finished!\n");
-                while(1);
-            }
+    
+    if (current_task_id == -1) {
+        next_id = 0;
+    } else {
+        // 必须模 MAX_APP_NUM (4)，不能模 app_num (1)
+        // 否则调度器永远看不到 fork 出来的 Task 1, 2, 3
+        next_id = (current_task_id + 1) % MAX_APP_NUM;
+    }
+
+    // 循环查找下一个 is_running == 1 的任务
+    int loop_count = 0;
+    while (tasks[next_id].is_running == 0) {
+        // 这里也要模 MAX_APP_NUM
+        next_id = (next_id + 1) % MAX_APP_NUM;
+        
+        loop_count++;
+        // 如果找了一整圈都没人，说明所有任务都退出了
+        if (loop_count >= MAX_APP_NUM) {
+            printf("[Kernel] All tasks finished!\n");
+            while(1);
         }
     }
     
     int prev_id = current_task_id;
     current_task_id = next_id;
     
+    // 切换页表
     uint64_t next_satp = (8L << 60) | (((uint64_t)tasks[next_id].pagetable) >> 12);
     asm volatile("csrw satp, %0" : : "r"(next_satp));
     asm volatile("sfence.vma");
@@ -138,6 +150,7 @@ void schedule() {
         __switch((uint64_t *)&idle_cx, (uint64_t *)&tasks[next_id].context);
     }
 }
+
 
 void task_yield() { schedule(); }
 void task_exit() { tasks[current_task_id].is_running = 0; schedule(); }
