@@ -166,14 +166,29 @@ void main(){
     // while (1) {};
 
     printf("\n[ToyOS] Phase 6: Page Table Mapping\n");
-    mm_init();
-    kvminit();
-    kvminithart();
-    printf("[Kernel] System matches Physical Memory 1:1.\n");
+
+    asm volatile("csrw stvec, %0"::"r"(__alltraps));
+
+    // // 手动写一个非法地址访问
+    // printf("[Main] Triggering a trap now ... \n");
+    // *(int*)0x0 = 0; // 会触发 Store Page Fault
+
+    // printf("[Main] Survived trap?(should not see this)\n");
+    // 为了调试暂时不执行
     
-    // 🔴 启动多进程
+    // 初始化物理内存
+    mm_init();
+
+    // 建立内核页表
+    kvminit();
+
+    // 开启MMU
+    kvminithart();
+
+    printf("[Kernel] System matches Physical Memory 1:1. \n");
+
     task_init();
     schedule();
-
+    
     while (1) {};
 }
