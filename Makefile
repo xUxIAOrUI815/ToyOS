@@ -7,9 +7,8 @@ OBJCOPY := $(TARGET)-objcopy
 CFLAGS := -Wall -O2 -fno-builtin -march=rv64gc -mabi=lp64d -mcmodel=medany
 USER_CFLAGS := $(CFLAGS) -fno-stack-protector
 
-QEMU_OPTS := -machine virt -m 128M -nographic -bios default -kernel kernel.elf
+QEMU_OPTS := -machine virt -nographic -bios default -kernel kernel.elf
 
-# --- 关键修改：源文件列表 ---
 # 1. 加入了 printf.c
 # 2. trap.S 改名为 trap_entry.S (防止和 trap.c 冲突)
 # 3. 加入了 trap.c
@@ -17,7 +16,7 @@ QEMU_OPTS := -machine virt -m 128M -nographic -bios default -kernel kernel.elf
 KERNEL_SRCS := os/entry.S os/main.c os/sbi.c os/printf.c os/link_app.S \
                os/trap/trap_entry.S os/trap/trap.c \
                os/switch.S os/task.c \
-               os/mm.c
+               os/mm.c os/paging.c
 # 处理成 .o 文件列表
 KERNEL_OBJS := $(KERNEL_SRCS:.c=.o)
 KERNEL_OBJS := $(KERNEL_OBJS:.S=.o)

@@ -30,3 +30,9 @@ void console_putstr(char *str) {
         console_putchar(*str++);
     }
 }
+
+// 从控制台读取一个字符
+// 返回值：如果是 -1 表示没有输入，否则返回字符的 ASCII 码
+long console_getchar(){
+    return sbi_call(2,0,0,0);
+}

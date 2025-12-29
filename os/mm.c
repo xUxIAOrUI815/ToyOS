@@ -62,7 +62,6 @@ void* frame_alloc() {
 
     // 先清空这一页内存，防止读到脏数据
     uint64_t addr = ppn * PAGE_SIZE;
-    printf("[Kernel] Allocated addr: %x\n", (int)addr);
 
     char *mem = (char *) addr;
     for (int i = 0; i < PAGE_SIZE; i++){

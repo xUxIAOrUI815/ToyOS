@@ -6,6 +6,7 @@ void console_putchar(int c);
 void task_exit();
 void task_yield();
 long console_getchar();
+int task_fork();
 
 typedef struct {
     uint64_t x[32];
@@ -65,6 +66,10 @@ TrapContext* syscall(TrapContext *cx) {
         }
         cx->sepc += 4;
     }
+    else if (syscall_num == 220) {  // sys_fork
+        cx->x[10] = task_fork();
+        cx->sepc += 4;
+    }
     else {
         printf("[Kernel] Unknown syscall: %d\n", syscall_num);
         while(1);
@@ -74,27 +79,7 @@ TrapContext* syscall(TrapContext *cx) {
     return cx;
 }
 
-// TrapContext* trap_handler(TrapContext *cx) {
-//     uint64_t scause, stval;
-//     asm volatile("csrr %0, scause" : "=r"(scause));
-//     asm volatile("csrr %0, stval" : "=r"(stval));
-    
 
-//     if ((scause >> 63) == 1) {
-//         // Interrupt
-//     } else {
-//         if (scause == 8) {
-//             // 🔴【修改2】接住 syscall 返回的指针
-//             cx = syscall(cx);
-//         } else {
-//             printf("[Kernel] Fatal Exception! scause=%d, stval=%x, sepc=%x\n", 
-//                    scause, stval, cx->sepc);
-//             while(1);
-//         }
-//     }
-
-//     return cx;
-// }
 TrapContext* trap_handler(TrapContext *cx) {
     uint64_t scause, stval;
     asm volatile("csrr %0, scause" : "=r"(scause));
