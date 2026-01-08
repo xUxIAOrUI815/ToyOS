@@ -8,21 +8,27 @@ void* frame_alloc();
 #define SATP_SV39 (8L << 60)
 #define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64_t)pagetable) >> 12))
 
-// --- 标志位 ---
-#define PTE_V (1L << 0)
-#define PTE_R (1L << 1)
-#define PTE_W (1L << 2)
-#define PTE_X (1L << 3)
-#define PTE_U (1L << 4)
-#define PTE_A (1L << 6)
-#define PTE_D (1L << 7)
+// --- 页表项标志位 ---
+#define PTE_V (1L << 0) // valid: 页表项有效
+#define PTE_R (1L << 1) // read: 可读
+#define PTE_W (1L << 2) // write: 可写
+#define PTE_X (1L << 3) // execute: 可执行
+#define PTE_U (1L << 4) // user: 用户态可访问
+#define PTE_A (1L << 6) // accessed: 被访问过
+#define PTE_D (1L << 7) // dirty: 被修改过
 
+// 宏定义
 #define PAGE_SIZE 4096
+// 从 PTE 中取出 物理页号 PPN
 #define PTE2PPN(pte) (((pte) >> 10) & 0x0FFFFFFFFFFFFFL)
+// 将物理页号 PPN 转换为 PTE
 #define PPN2PTE(ppn) (((ppn) << 10))
+// 获取物理地址
 #define PTE2PA(pte) (PTE2PPN(pte) * PAGE_SIZE)
+// 获取虚拟地址的某一级索引
 #define PX(level, va) ((((uint64_t)(va)) >> (12 + 9 * (level))) & 0x1FF)
 
+// 页表结构 一个页表页包含 512 个 PTE
 typedef uint64_t* pagetable_t;
 
 // 引用外部符号
@@ -37,25 +43,42 @@ extern char tramp_start[]; // Trap 代码开始
 #define UART0 0x10000000L
 #define MEMORY_END 0x88000000L
 
-// --- 核心函数 (保留之前的 walk 和 mappages) ---
+// --- 页表查询与创建 ---
+// 查找页表 如果中间缺失页表页 则创建
 
 uint64_t* walk(pagetable_t pagetable, uint64_t va, int alloc) {
     for (int level = 2; level > 0; level--) {
         int idx = PX(level, va);
         uint64_t pte = pagetable[idx];
         if (pte & PTE_V) {
+            // 如果该项有效 说明下一级页表存在
+            // 取出下一级页表的物理页号 转为物理地址
             pagetable = (pagetable_t)PTE2PA(pte);
         } else {
+            // 如果无效 说明缺页
             if (!alloc) return 0;
+
+            // 分配一个新的物理页作为下一级页表
             pagetable_t new_page = (pagetable_t)frame_alloc();
-            if (new_page == 0) return 0;
+            if (new_page == 0) return 0;    // 内存不足
+
+            // 将新页填入当前页表项
+            // (uint64_t)new_page / PAGE_SIZE 即 PPN
+            // | PTE_V 表示有效
             pagetable[idx] = PPN2PTE((uint64_t)new_page / PAGE_SIZE) | PTE_V;
+
+            // 更新 pagetable 指针 
             pagetable = new_page;
         }
     }
+
+    // 循环结束，pagetable 现在指向 Level 0 (最底层) 页表
+    // 返回对应的 PTE 指针
     return &pagetable[PX(0, va)];
 }
 
+// 建立映射 将虚拟地址 va 映射到物理地址 pa 
+// perm 权限标志位 R/W/X/U
 int mappages(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int perm) {
     uint64_t start = va;
     uint64_t end = va + size;
@@ -65,7 +88,7 @@ int mappages(pagetable_t pagetable, uint64_t va, uint64_t pa, uint64_t size, int
         uint64_t *pte = walk(pagetable, a, 1);
         if (pte == 0) return -1;
         
-        // 🔴 如果是 Map Text 阶段，打印一下当前进度
+        // 如果是 Map Text 阶段，打印一下当前进度
         // 这样我们知道是在第几页崩的
         if (va == (uint64_t)stext) {
              // 减少打印频率，只打印每 4KB
@@ -143,8 +166,7 @@ void kvminit() {
     printf("[Kernel] Map Data/BSS/Heap... done.\n");
     
     // 5. 映射 Trampoline (Trap 入口)
-    // 把它映射到虚拟地址最高处 (uCore 惯例)，也为了和内核其他部分分开
-    // 暂时我们也做 1:1 映射，为了简单
+    // 把它做 1:1 映射到虚拟地址最高处，和内核其他部分分开
     // mappages(kernel_pagetable, (uint64_t)tramp_start, (uint64_t)tramp_start, PAGE_SIZE, PTE_R | PTE_X);
 }
 
@@ -201,7 +223,7 @@ int uvm_copy(pagetable_t old_pt, pagetable_t new_pt, uint64_t sz) {
         my_memcpy_paging(new_pa, (void*)pa, PAGE_SIZE);
         
         // 5. 在子进程页表中建立映射
-        // 注意：flags 包含了 PTE_U 等标志
+        // flags 包含了 PTE_U 等标志
         uvm_map(new_pt, va, (uint64_t)new_pa, PAGE_SIZE, flags);
     }
     return 0;

@@ -35,8 +35,8 @@ typedef struct {
     int is_running;
     TaskContext context;
     uint64_t kernel_stack[PAGE_SIZE / 8];
-    pagetable_t pagetable;
-    uint64_t trap_cx_ppn;
+    pagetable_t pagetable;  // 新增: 每个任务独立的页表
+    uint64_t trap_cx_ppn;   // trap 上下文所在的物理页号
 } TaskControlBlock;
 
 TaskControlBlock tasks[MAX_APP_NUM];
@@ -61,13 +61,14 @@ void task_init() {
     uint64_t app_size = (uint64_t)&_app_end - (uint64_t)&_app_start;
 
     for (int i = 0; i < app_num; i++) {
-        // 1. 创建用户页表 (复制内核页表)
+        // 1. 创建用户页表 
+        // 这里直接复制了内核页表作为基础 用户态陷入内核时 内核代码依然可见
         tasks[i].pagetable = (pagetable_t)frame_alloc();
         my_memcpy(tasks[i].pagetable, kernel_pagetable, PAGE_SIZE);
 
         // 2. 映射用户代码 (Text)
-        void *app_mem = frame_alloc();
-        my_memcpy(app_mem, &_app_start, app_size);
+        void *app_mem = frame_alloc();  // 分配一页
+        my_memcpy(app_mem, &_app_start, app_size);  // 复制 User App 的代码
         
         // 刷新指令缓存 防止CPU读到旧数据
         asm volatile("fence.i");
@@ -76,7 +77,7 @@ void task_init() {
         uvm_map(tasks[i].pagetable, USER_CODE_START, (uint64_t)app_mem, PAGE_SIZE, 
                 PTE_R | PTE_W | PTE_X | PTE_U);
 
-        // 3. 映射用户栈 (Stack) - 🔴【修复点】
+        // 3. 映射用户栈 (Stack) 
         void *stack_mem = frame_alloc();
         // 映射到 0x20000, 权限 R|W|U (用户可读写)
         uvm_map(tasks[i].pagetable, USER_STACK_START, (uint64_t)stack_mem, PAGE_SIZE, 
@@ -101,7 +102,7 @@ void task_init() {
         cx->sstatus = (1L << 18); // SUM=1
         cx->sepc = USER_CODE_START; // 0x10000
         
-        // 🔴【关键】设置用户栈指针
+        // 设置用户栈指针
         // 栈向下生长，所以 SP 设为 (Start + Size)
         cx->x[2] = USER_STACK_START + PAGE_SIZE; 
 
@@ -128,7 +129,7 @@ void schedule() {
         next_id = (next_id + 1) % MAX_APP_NUM;
         
         loop_count++;
-        // 如果找了一整圈都没人，说明所有任务都退出了
+        // 如果找了一整圈都没有，说明所有任务都退出了
         if (loop_count >= MAX_APP_NUM) {
             printf("[Kernel] All tasks finished!\n");
             while(1);
@@ -185,7 +186,7 @@ int task_fork() {
     // 复制内核映射
     my_memcpy(child->pagetable, kernel_pagetable, PAGE_SIZE);
     
-    // 3. 【核心】复制用户地址空间 (代码段 + 栈)
+    // 3. 复制用户地址空间 (代码段 + 栈)
     // 从父进程页表复制到子进程页表
     if (uvm_copy(parent->pagetable, child->pagetable, USER_SPACE_SIZE) < 0) {
         printf("[Kernel] Fork failed: Memory copy error\n");
@@ -216,11 +217,11 @@ int task_fork() {
     // 直接内存拷贝 TrapContext
     *child_cx = *parent_cx;
 
-    //【新增】帮子进程跳过 ecall 指令！
+    // 帮子进程跳过 ecall 指令
     // 否则它醒来后会再次执行 sys_fork，导致无限递归
     child_cx->sepc += 4; 
     
-    // 5. 【关键】修改子进程的返回值
+    // 5. 修改子进程的返回值
     // fork 对子进程返回 0
     child_cx->x[10] = 0; // x10 是 a0 寄存器
     

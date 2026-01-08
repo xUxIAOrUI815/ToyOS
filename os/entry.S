@@ -3,6 +3,7 @@
     .section .text.entry
     .globl _start
 _start:
+    # 清空 BSS 段
     la a0, sbss
     la a1, ebss
     bge a0, a1, end_bss_init

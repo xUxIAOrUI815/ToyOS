@@ -6,7 +6,7 @@ void console_putchar(int c);
 void task_exit();
 void task_yield();
 long console_getchar();
-int task_fork();
+int task_fork();        // 注册 fork 的系统调用
 
 typedef struct {
     uint64_t x[32];
@@ -14,7 +14,7 @@ typedef struct {
     uint64_t sepc;
 } TrapContext;
 
-// 🔴【修改1】让 syscall 也返回 TrapContext*，保持数据流连贯
+// 让 syscall 也返回 TrapContext*，保持数据流连贯
 TrapContext* syscall(TrapContext *cx) {
     uint64_t syscall_num = cx->x[17];
 
@@ -75,7 +75,7 @@ TrapContext* syscall(TrapContext *cx) {
         while(1);
     }
     
-    // 🔴【关键】必须返回 cx
+    // 必须返回 cx
     return cx;
 }
 
@@ -92,7 +92,7 @@ TrapContext* trap_handler(TrapContext *cx) {
         if (scause == 8) {
             cx = syscall(cx);
         } else {
-            // 🔴【关键】打印详细崩溃信息
+            // 打印详细崩溃信息
             printf("\n[Kernel] PANIC! Exception @ Kernel Mode\n");
             printf("scause = %d (Exception Type)\n", scause);
             printf("stval  = %x (Bad Address)\n", stval);

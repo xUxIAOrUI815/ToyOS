@@ -9,12 +9,12 @@ SECTIONS
     . = BASE_ADDRESS;
 
     /* 代码段 */
-    /* 🔴【修改】导出 stext (Start Text) */
+    /* 导出 stext (Start Text) */
     stext = .;
     .text : {
         *(.text.entry)  /* entry.S 必须放最前面 */
         *(.text .text.*)
-        /* 🔴【新增】把 trampoline (Trap入口) 对齐到页边界，方便映射 */
+        /* 把 trampoline (Trap入口) 对齐到页边界，方便映射 */
         . = ALIGN(4096);
         tramp_start = .;
         *(.text.trampoline)
@@ -22,7 +22,7 @@ SECTIONS
         tramp_end = .;
     }
     . = ALIGN(4096);
-    /* 🔴【修改】导出 etext (End Text) */
+    /* 导出 etext (End Text) */
     etext = .;
 
     .rodata : {
@@ -30,7 +30,7 @@ SECTIONS
         *(.srodata .srodata.*)
     }
     . = ALIGN(4096);
-    /* 🔴【修改】导出 erodata */
+    /* 导出 erodata */
     erodata = .;
 
     /* 数据段 (已初始化的全局变量) */
@@ -48,7 +48,7 @@ SECTIONS
         ebss = .;      /* BSS 结束 */
     }
 
-    /* 定义内核结束的地址 */
+    /* 定义内核结束的地址 新增 ekernel符号*/
     . = ALIGN(4096);
     ekernel = .;
 }

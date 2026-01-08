@@ -2,7 +2,7 @@
 
 void printf(char *fmt, ...);
 
-// 引用 kernel.ld 中的符号
+// 引用 kernel.ld 中的符号  标记内核的结束
 extern char ekernel[];
 
 #define MEMORY_END 0x88000000   // 物理内存的末尾

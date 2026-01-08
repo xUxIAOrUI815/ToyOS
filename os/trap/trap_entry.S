@@ -7,6 +7,7 @@
     ld x\n, \n*8(sp)
 .endm
 
+# 把 .section .text 改为 .section .text.trampoline
 .section .text.trampoline
 .globl __alltraps
 .globl __restore
